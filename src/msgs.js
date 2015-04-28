@@ -11,7 +11,7 @@ var Msg = require('./msg');
 module.exports.types = {}
 
 // load resource file
-var data = fs.readFileSync(__dirname + '/../resources/FIX42.xml');
+var data = fs.readFileSync(__dirname + '/../resources/fix-ss.xml');
 
 var parser = new xml2js.Parser();
 parser.parseString(data, function (err, result) {
@@ -23,12 +23,41 @@ parser.parseString(data, function (err, result) {
     var rev_field_map = {
     };
 
+    var component_map = {};
+
+
     result.fields.field.forEach(function(field) {
         var number = field['@'].number;
         var name = field['@'].name;
 
         field_map[name] = number;
         rev_field_map[number] = name;
+    });
+
+    result.components.component.forEach(function(component) {
+        var name = component['@'].name;
+        var fields = [];
+
+        if (!(component.field instanceof Array)) {
+            component.field = [component.field];
+        }
+
+        component.field.forEach(function(field) {
+            if (!field) return;
+
+            var field_name = field['@'].name;
+            var field_id = field_map[field_name];
+            if (!field_id) {
+                return;
+            }
+
+            fields.push({
+                name: field_name,
+                id: field_id
+            });
+        });
+
+        component_map[name] = fields;
     });
 
     result.messages.message.forEach(function(message) {
@@ -54,7 +83,7 @@ parser.parseString(data, function (err, result) {
                     },
                     set: function(value) {
                         self.set(id, value);
-                    },
+                    }
                 });
             });
         };
@@ -91,8 +120,20 @@ parser.parseString(data, function (err, result) {
 
             field_properties.push({
                 name: field_name,
-                id: field_id,
+                id: field_id
             });
+        });
+
+        if (!(message.component instanceof Array)) {
+            message.component = [message.component];
+        }
+
+        message.component.forEach(function(component) {
+            if (!component) return;
+
+            var comp_name = component['@'].name;
+            var newArray = field_properties.concat(component_map[comp_name]);
+            field_properties = newArray;
         });
 
         module.exports[name] = msg_t;
